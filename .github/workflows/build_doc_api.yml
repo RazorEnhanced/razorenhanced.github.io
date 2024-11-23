@@ -50,7 +50,7 @@ jobs:
       
     #Download AutoDoc.py
     - name: Download AutoDoc.py
-      run: Invoke-WebRequest -OutFile "autodoc.py" -Uri https://raw.githubusercontent.com/RazorEnhanced/razorenhanced.github.io/main/doc/autodoc.py
+      run: Invoke-WebRequest -OutFile "autodoc.py" -Uri https://raw.githubusercontent.com/RazorEnhanced-UO/razorenhanced.github.io/main/doc/autodoc.py
     - name: Display directories
       run: dir
     - name: Display autodoc.py content
@@ -64,7 +64,7 @@ jobs:
     - name: Checkout website repo
       uses: actions/checkout@v3
       with:
-        repository: RazorEnhanced/razorenhanced.github.io
+        repository: RazorEnhanced-UO/razorenhanced.github.io
         path: website_repo
     
     #Build Docs
