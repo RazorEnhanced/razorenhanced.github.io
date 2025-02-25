@@ -18,7 +18,7 @@ jobs:
     - name: Get Latest Version Info
       id: get_version
       run: |
-        $latestJson = Invoke-RestMethod -Uri "https://razorenhanced.github.io/releases/latest.json"
+        $latestJson = Invoke-RestMethod -Uri "https://razorenhanced.github.io/releases/latest.json" -AllowInsecureRedirect
         Write-Host "Latest version: $($latestJson.version)"
         Write-Host "Download URL: $($latestJson.zipUrl)"
         echo "download_url=$($latestJson.zipUrl)" >> $env:GITHUB_OUTPUT
@@ -27,7 +27,7 @@ jobs:
     # Download the latest release using the URL from latest.json
     - name: Download Latest RE
       run: |
-        Invoke-WebRequest -Uri "${{ steps.get_version.outputs.download_url }}" -OutFile "RazorEnhanced-latest.zip"
+        Invoke-WebRequest -Uri "${{ steps.get_version.outputs.download_url }}" -OutFile "RazorEnhanced-latest.zip" -AllowInsecureRedirect
       shell: pwsh
       
     - name: Display downloaded files
