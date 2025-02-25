@@ -14,87 +14,79 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    # Get the latest version information from latest.json
-    - name: Get Latest Version Info
-      id: get_version
-      run: |
-        $latestJson = Invoke-RestMethod -Uri "https://razorenhanced.github.io/releases/latest.json" -AllowInsecureRedirect
-        Write-Host "Latest version: $($latestJson.version)"
-        Write-Host "Download URL: $($latestJson.zipUrl)"
-        echo "download_url=$($latestJson.zipUrl)" >> $env:GITHUB_OUTPUT
-      shell: pwsh
-    
-    # Download the latest release using the URL from latest.json
-    - name: Download Latest RE
-      run: |
-        Invoke-WebRequest -Uri "${{ steps.get_version.outputs.download_url }}" -OutFile "RazorEnhanced-latest.zip" -AllowInsecureRedirect
-      shell: pwsh
-      
-    - name: Display downloaded files
-      run: dir
-      
-    #Unzip
-    - name: Extract some files
-      run: 7z x RazorEnhanced-latest.zip
-      
-    - name: Display unzipped files
-      run: dir
-  
-    #Run 
-    #- name: Run RE to trigger the creation of AutoComplete.json
-    #  run: $proc = start ./RazorEnhanced.exe -Passthru; $proc | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue; kill $proc; echo done;
-    
-    # Try to run directly   
-    - name: Run RE to trigger the creation of AutoComplete.json
-      run: |
-        RazorEnhanced.exe --autoDocsOnly
-        dir Config
-      shell: cmd
-    
-    - name: parse the output
-      run: echo $EXECUTION_OUTPUT
-      
-    - name: Display directories
-      run: dir Config/
-      
-    #Download AutoDoc.py
-    - name: Download AutoDoc.py
-      run: Invoke-WebRequest -OutFile "autodoc.py" -Uri https://raw.githubusercontent.com/RazorEnhanced-UO/razorenhanced.github.io/main/doc/autodoc.py
-    - name: Display directories
-      run: dir
-    - name: Display autodoc.py content
-      run: Get-Content "autodoc.py"
-    
-    #Build Docs
-    - name: Display autodoc.py content
-      run: python autodoc.py
-      
-    #Checkout current website
+    # Checkout the repository first
     - name: Checkout website repo
       uses: actions/checkout@v3
       with:
         repository: RazorEnhanced-UO/razorenhanced.github.io
         path: website_repo
     
-    #Build Docs
-    - name: Update local repo doc
-      run: Copy-Item  -Path .\doc\* -Destination .\website_repo\doc\ -Recurse -force -Verbose
+    # Get the latest zip file directly from the repository
+    - name: Find latest release file
+      id: find_zip
+      run: |
+        # Navigate to releases directory
+        cd website_repo/releases
+        
+        # Get the latest zip file by last modified date
+        $latestZip = Get-ChildItem -Filter "RazorEnhanced-*.zip" | 
+                     Where-Object { $_.Name -ne "RazorEnhanced-latest.zip" } |
+                     Sort-Object -Property LastWriteTime -Descending | 
+                     Select-Object -First 1
+        
+        if ($latestZip) {
+          $zipPath = (Get-Item $latestZip.FullName).FullName
+          Write-Host "Found latest release: $($latestZip.Name)"
+          echo "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+        } else {
+          Write-Error "No release zip files found in the releases directory"
+          exit 1
+        }
+      shell: pwsh
+      
+    # Extract the zip file
+    - name: Extract the latest release
+      run: |
+        Write-Host "Extracting: ${{ steps.find_zip.outputs.zip_path }}"
+        7z x "${{ steps.find_zip.outputs.zip_path }}" -o"./extracted"
+      shell: pwsh
+      
+    - name: Display extracted files
+      run: dir extracted
+  
+    # Try to run directly   
+    - name: Run RE to trigger the creation of AutoComplete.json
+      run: |
+        cd extracted
+        RazorEnhanced.exe --autoDocsOnly
+        dir Config
+      shell: cmd
     
     - name: Display directories
-      run: dir -S
+      run: dir extracted/Config/
       
+    # Build Docs (use the AutoDoc.py file from the repository)
+    - name: Run autodoc.py
+      run: |
+        cd extracted
+        # Copy AutoDoc.py from the repository
+        Copy-Item "../website_repo/doc/autodoc.py" -Destination "."
+        # Run AutoDoc
+        python autodoc.py
+      shell: pwsh
+    
+    # Copy generated docs to the repository
+    - name: Update repo documentation
+      run: |
+        Copy-Item -Path "extracted/doc/*" -Destination "website_repo/doc/" -Recurse -Force -Verbose
+      shell: pwsh
+    
     # Add, commit & push
     - name: Add, Commit & push
       uses: EndBug/add-and-commit@v9
       with:
         message: "GitHub Actions build_docs"
         github_token: "${{ secrets.GITHUB_TOKEN }}"
-        # The arguments for the `git add` command (see the paragraph below for more info)
-        # Default: '.'
-        # add: 'src'
         cwd: './website_repo'
         pathspec_error_handling: exitImmediately
-        
-        # Arguments for the git pull command. By default, the action does not pull.
-        #pull: ''
         push: true
