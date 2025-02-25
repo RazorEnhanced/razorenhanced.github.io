@@ -12,21 +12,18 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    # Checkout the repository first
+    # Checkout the repository with LFS support enabled
     - name: Checkout website repo
       uses: actions/checkout@v3
       with:
         repository: RazorEnhanced-UO/razorenhanced.github.io
         path: website_repo
+        lfs: true  # Enable LFS during checkout to get the actual zip files
     
     # Debug the working directory and structure
     - name: Debug directory structure
       run: |
         Write-Host "Current directory: $pwd"
-        Write-Host "Directory contents at root:"
-        Get-ChildItem
-        Write-Host "Website repo directory contents:"
-        Get-ChildItem website_repo
         Write-Host "Releases directory contents:"
         if (Test-Path "website_repo/releases") {
           Get-ChildItem website_repo/releases
@@ -52,25 +49,55 @@ jobs:
                      Select-Object -First 1
         
         if ($latestZip) {
-          Write-Host "Found latest release: $($latestZip.Name)"
-          Write-Host "Full path: $($latestZip.FullName)"
+          Write-Host "Found latest release: $($latestZip.Name) (Size: $($latestZip.Length) bytes)"
           echo "zip_file=$($latestZip.Name)" >> $env:GITHUB_OUTPUT
+          
+          # If file is still small, it might be an LFS pointer that wasn't properly downloaded
+          if ($latestZip.Length -lt 1000000) {
+            Write-Warning "ZIP file is suspiciously small for an application archive. LFS may not have downloaded properly."
+            echo "use_fallback=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "use_fallback=false" >> $env:GITHUB_OUTPUT
+          }
         } else {
           Write-Error "No release zip files found in the releases directory"
-          exit 1
+          echo "use_fallback=true" >> $env:GITHUB_OUTPUT
         }
       shell: pwsh
       
-    # Extract the zip file
-    - name: Extract the latest release
+    # Fall back to GitHub Releases API if LFS file download failed
+    - name: Download from GitHub Releases (Fallback)
+      if: steps.find_zip.outputs.use_fallback == 'true'
+      uses: robinraju/release-downloader@v1.6
+      with:
+        repository: "RazorEnhanced/RazorEnhanced"
+        latest: true
+        fileName: "RazorEnhanced-*.zip"
+    
+    # Extract from local LFS file if available
+    - name: Extract local ZIP file
+      if: steps.find_zip.outputs.use_fallback != 'true'
       run: |
         # Create extraction directory
         New-Item -ItemType Directory -Path "extracted" -Force
         
         # Extract the zip
         $zipPath = "website_repo/releases/${{ steps.find_zip.outputs.zip_file }}"
-        Write-Host "Extracting: $zipPath"
+        Write-Host "Extracting local ZIP: $zipPath"
         7z x "$zipPath" -o"./extracted"
+      shell: pwsh
+      
+    # Extract from fallback download if needed
+    - name: Extract downloaded ZIP (Fallback)
+      if: steps.find_zip.outputs.use_fallback == 'true'
+      run: |
+        # Create extraction directory
+        New-Item -ItemType Directory -Path "extracted" -Force
+        
+        # Find the downloaded zip file
+        $downloadedZip = Get-ChildItem -Filter "RazorEnhanced-*.zip" | Select-Object -First 1
+        Write-Host "Extracting downloaded ZIP: $($downloadedZip.Name)"
+        7z x "$($downloadedZip.Name)" -o"./extracted"
       shell: pwsh
       
     - name: Display extracted files
