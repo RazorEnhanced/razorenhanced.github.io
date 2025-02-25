@@ -130,6 +130,34 @@ jobs:
         Copy-Item -Path "extracted/doc/*" -Destination "website_repo/doc/" -Recurse -Force -Verbose
       shell: pwsh
 
+    # Update the latest build link in index.htm
+    # This step assumes that the index.htm file is in the root of the website_repo
+    # and that the latest zip file is in the releases directory.
+    # It will replace the old link with the new one.
+    - name: Update Latest Build Link in index.htm
+      run: |
+        $indexFile = "website_repo/index.htm"
+        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
+        if (-Not (Test-Path $indexFile)) {
+          Write-Error "index.htm not found!"
+          exit 1
+        }
+
+        # Extract version from filename
+        if ($latestZip -match "RazorEnhanced-(\d+\.\d+\.\d+\.\d+)\.zip") {
+          $latestVersion = $matches[1]
+          $newUrl = "https://github.com/RazorEnhanced/razorenhanced.github.io/releases/download/$latestVersion/$latestZip"
+
+          # Replace the old link with the new one
+          (Get-Content $indexFile) -replace 'https:\/\/github\.com\/RazorEnhanced\/razorenhanced\.github\.io\/releases\/download\/[\d.]+\/RazorEnhanced-[\d.]+\.zip', $newUrl | Set-Content $indexFile
+          
+          Write-Host "Updated Latest Build link in index.htm to: $newUrl"
+        } else {
+          Write-Error "Could not extract version from $latestZip"
+          exit 1
+        }
+      shell: pwsh
+
     # Commit changes
     - name: Commit
       run: |
