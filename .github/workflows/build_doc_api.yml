@@ -172,7 +172,6 @@ jobs:
         Write-Host "Updated Latest Build link in index.htm to: $downloadUrl"
       shell: pwsh
 
-
     # Commit changes
     - name: Commit
       run: |
