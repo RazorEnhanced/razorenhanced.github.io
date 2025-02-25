@@ -134,29 +134,44 @@ jobs:
     # This step assumes that the index.htm file is in the root of the website_repo
     # and that the latest zip file is in the releases directory.
     # It will replace the old link with the new one.
+    - name: Fetch Correct Download URL from GitHub Releases
+      id: get_release_url
+      run: |
+        $repo = "RazorEnhanced/RazorEnhanced"
+        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
+        $apiUrl = "https://api.github.com/repos/$repo/releases/latest"
+
+        # Fetch release data
+        $response = Invoke-RestMethod -Uri $apiUrl -Headers @{"Accept"="application/vnd.github.v3+json"}
+
+        # Find the asset matching our ZIP file
+        $downloadUrl = $response.assets | Where-Object { $_.name -eq "$latestZip" } | Select-Object -ExpandProperty browser_download_url
+
+        if (-not $downloadUrl) {
+          Write-Error "Could not find a valid download URL for $latestZip"
+          exit 1
+        }
+
+        Write-Host "Found download URL: $downloadUrl"
+        echo "download_url=$downloadUrl" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    # Update index.htm with the correct download link
     - name: Update Latest Build Link in index.htm
       run: |
         $indexFile = "website_repo/index.htm"
-        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
+        $downloadUrl = "${{ steps.get_release_url.outputs.download_url }}"
         if (-Not (Test-Path $indexFile)) {
           Write-Error "index.htm not found!"
           exit 1
         }
 
-        # Extract version from filename
-        if ($latestZip -match "RazorEnhanced-(\d+\.\d+\.\d+\.\d+)\.zip") {
-          $latestVersion = $matches[1]
-          $newUrl = "https://github.com/RazorEnhanced/razorenhanced.github.io/releases/download/$latestVersion/$latestZip"
-
-          # Replace the old link with the new one
-          (Get-Content $indexFile) -replace 'https:\/\/github\.com\/RazorEnhanced\/razorenhanced\.github\.io\/releases\/download\/[\d.]+\/RazorEnhanced-[\d.]+\.zip', $newUrl | Set-Content $indexFile
-          
-          Write-Host "Updated Latest Build link in index.htm to: $newUrl"
-        } else {
-          Write-Error "Could not extract version from $latestZip"
-          exit 1
-        }
+        # Replace the old download link with the new one
+        (Get-Content $indexFile) -replace 'https:\/\/github\.com\/RazorEnhanced\/razorenhanced\.github\.io\/releases\/download\/[\d.]+\/RazorEnhanced-[\d.]+\.zip', $downloadUrl | Set-Content $indexFile
+        
+        Write-Host "Updated Latest Build link in index.htm to: $downloadUrl"
       shell: pwsh
+
 
     # Commit changes
     - name: Commit
