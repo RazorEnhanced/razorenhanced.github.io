@@ -14,19 +14,28 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    #Download
-    - uses: robinraju/release-downloader@v1.6
-      name: Download Latest RE
-      with:
-        repository: "RazorEnhanced/RazorEnhanced"
-        latest: true
-        fileName: "RazorEnhanced-*.zip"
+    # Get the latest version information from latest.json
+    - name: Get Latest Version Info
+      id: get_version
+      run: |
+        $latestJson = Invoke-RestMethod -Uri "https://razorenhanced.github.io/releases/latest.json"
+        Write-Host "Latest version: $($latestJson.version)"
+        Write-Host "Download URL: $($latestJson.zipUrl)"
+        echo "download_url=$($latestJson.zipUrl)" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+    
+    # Download the latest release using the URL from latest.json
+    - name: Download Latest RE
+      run: |
+        Invoke-WebRequest -Uri "${{ steps.get_version.outputs.download_url }}" -OutFile "RazorEnhanced-latest.zip"
+      shell: pwsh
+      
     - name: Display downloaded files
       run: dir
       
     #Unzip
     - name: Extract some files
-      run: 7z x RazorEnhanced-*.zip
+      run: 7z x RazorEnhanced-latest.zip
       
     - name: Display unzipped files
       run: dir
@@ -89,4 +98,3 @@ jobs:
         # Arguments for the git pull command. By default, the action does not pull.
         #pull: ''
         push: true
-
