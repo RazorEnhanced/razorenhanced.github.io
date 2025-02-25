@@ -137,24 +137,26 @@ jobs:
     - name: Fetch Correct Download URL from GitHub Releases
       id: get_release_url
       run: |
-        $repo = "RazorEnhanced/RazorEnhanced"
+        $repo = "RazorEnhanced/razorenhanced.github.io"
         $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
-        $apiUrl = "https://api.github.com/repos/$repo/releases/latest"
+        $apiUrl = "https://api.github.com/repos/$repo/releases"
 
-        # Fetch release data
+        # Fetch all releases
         $response = Invoke-RestMethod -Uri $apiUrl -Headers @{"Accept"="application/vnd.github.v3+json"}
 
-        # Find the asset matching our ZIP file
-        $downloadUrl = $response.assets | Where-Object { $_.name -eq "$latestZip" } | Select-Object -ExpandProperty browser_download_url
+        # Find the latest release containing our ZIP file
+        $release = $response | Where-Object { $_.assets.name -contains $latestZip } | Select-Object -First 1
+        $downloadUrl = $release.assets | Where-Object { $_.name -eq "$latestZip" } | Select-Object -ExpandProperty browser_download_url
 
         if (-not $downloadUrl) {
-          Write-Error "Could not find a valid download URL for $latestZip"
+          Write-Error "Could not find a valid download URL for $latestZip in GitHub Releases"
           exit 1
         }
 
         Write-Host "Found download URL: $downloadUrl"
         echo "download_url=$downloadUrl" >> $env:GITHUB_OUTPUT
       shell: pwsh
+
 
     # Update index.htm with the correct download link
     - name: Update Latest Build Link in index.htm
