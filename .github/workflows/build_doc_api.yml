@@ -2,14 +2,12 @@
 
 name: AutoDoc API
 
-# Controls when the action will run. Workflow runs when manually triggered using the UI
-# or API.
+# Controls when the action will run.
 on:
   workflow_dispatch:
   push:
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+
 jobs:
-  
   rebuild_docs:
     runs-on: windows-latest
     
@@ -21,23 +19,42 @@ jobs:
         repository: RazorEnhanced-UO/razorenhanced.github.io
         path: website_repo
     
+    # Debug the working directory and structure
+    - name: Debug directory structure
+      run: |
+        Write-Host "Current directory: $pwd"
+        Write-Host "Directory contents at root:"
+        Get-ChildItem
+        Write-Host "Website repo directory contents:"
+        Get-ChildItem website_repo
+        Write-Host "Releases directory contents:"
+        if (Test-Path "website_repo/releases") {
+          Get-ChildItem website_repo/releases
+        } else {
+          Write-Host "Releases directory not found!"
+        }
+      shell: pwsh
+    
     # Get the latest zip file directly from the repository
     - name: Find latest release file
       id: find_zip
       run: |
-        # Navigate to releases directory
-        cd website_repo/releases
+        # Check if releases directory exists
+        if (-not (Test-Path "website_repo/releases")) {
+          Write-Error "Releases directory not found!"
+          exit 1
+        }
         
         # Get the latest zip file by last modified date
-        $latestZip = Get-ChildItem -Filter "RazorEnhanced-*.zip" | 
+        $latestZip = Get-ChildItem -Path "website_repo/releases" -Filter "RazorEnhanced-*.zip" | 
                      Where-Object { $_.Name -ne "RazorEnhanced-latest.zip" } |
                      Sort-Object -Property LastWriteTime -Descending | 
                      Select-Object -First 1
         
         if ($latestZip) {
-          $zipPath = (Get-Item $latestZip.FullName).FullName
           Write-Host "Found latest release: $($latestZip.Name)"
-          echo "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+          Write-Host "Full path: $($latestZip.FullName)"
+          echo "zip_file=$($latestZip.Name)" >> $env:GITHUB_OUTPUT
         } else {
           Write-Error "No release zip files found in the releases directory"
           exit 1
@@ -47,8 +64,13 @@ jobs:
     # Extract the zip file
     - name: Extract the latest release
       run: |
-        Write-Host "Extracting: ${{ steps.find_zip.outputs.zip_path }}"
-        7z x "${{ steps.find_zip.outputs.zip_path }}" -o"./extracted"
+        # Create extraction directory
+        New-Item -ItemType Directory -Path "extracted" -Force
+        
+        # Extract the zip
+        $zipPath = "website_repo/releases/${{ steps.find_zip.outputs.zip_file }}"
+        Write-Host "Extracting: $zipPath"
+        7z x "$zipPath" -o"./extracted"
       shell: pwsh
       
     - name: Display extracted files
