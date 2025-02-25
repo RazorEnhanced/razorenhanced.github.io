@@ -16,7 +16,7 @@ jobs:
     - name: Checkout website repo
       uses: actions/checkout@v3
       with:
-        repository: RazorEnhanced-UO/razorenhanced.github.io
+        repository: RazorEnhanced/razorenhanced.github.io
         path: website_repo
         lfs: true  # Enable LFS during checkout to get the actual zip files
     
@@ -130,12 +130,27 @@ jobs:
         Copy-Item -Path "extracted/doc/*" -Destination "website_repo/doc/" -Recurse -Force -Verbose
       shell: pwsh
     
-    # Add, commit & push
-    - name: Add, Commit & push
-      uses: EndBug/add-and-commit@v9
-      with:
-        message: "GitHub Actions build_docs"
-        github_token: "${{ secrets.GITHUB_TOKEN }}"
-        cwd: './website_repo'
-        pathspec_error_handling: exitImmediately
-        push: true
+# Manual commit and push instead of using the action
+- name: Commit and push changes
+run: |
+  cd website_repo
+  git config user.name "GitHub Actions Bot"
+  git config user.email "actions@github.com"
+  
+  # Stage changes
+  git add doc/
+  
+  # Commit if there are changes
+  if (git status --porcelain | Select-String -Pattern "doc/") {
+    git commit -m "GitHub Actions build_docs"
+    
+    # Set remote URL with token for authentication
+    git remote set-url origin https://x-access-token:${{ secrets.DEPLOYMENT_TOKEN }}@github.com/RazorEnhanced/razorenhanced.github.io.git
+    
+    # Push the changes
+    git push
+    Write-Host "Changes committed and pushed successfully"
+  } else {
+    Write-Host "No documentation changes to commit"
+  }
+shell: pwsh
