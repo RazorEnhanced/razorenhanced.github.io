@@ -130,7 +130,7 @@ jobs:
         Copy-Item -Path "extracted/doc/*" -Destination "website_repo/doc/" -Recurse -Force -Verbose
       shell: pwsh
 
-# Manual commit and push with improved error handling
+# Use GitHub CLI for authentication and pushing
     - name: Commit and push changes
       run: |
         cd website_repo
@@ -145,28 +145,21 @@ jobs:
           # Commit changes
           git commit -m "GitHub Actions build_docs"
           
-          # Debug token visibility (will be masked in logs)
-          $tokenLength = "${{ secrets.DEPLOYMENT_TOKEN }}".Length
-          Write-Host "Token length: $tokenLength characters"
+          # Use GitHub CLI for authentication
+          Write-Host "Authenticating with GitHub CLI..."
+          echo "${{ secrets.DEPLOYMENT_TOKEN }}" | gh auth login --with-token
           
-          # Set remote URL with token for authentication
-          # Use the token directly in the URL with proper format
-          git remote set-url origin "https://${{ secrets.DEPLOYMENT_TOKEN }}@github.com/RazorEnhanced/razorenhanced.github.io.git"
+          # Verify auth status
+          gh auth status
           
-          # Push with error handling
-          try {
-            # Push and capture output
-            $pushOutput = git push 2>&1
-            $pushSuccess = $?
-            
-            if ($pushSuccess) {
-              Write-Host "Changes pushed successfully!"
-            } else {
-              Write-Host "Error pushing changes: $pushOutput"
-              exit 1
-            }
-          } catch {
-            Write-Host "Exception during push: $_"
+          # Push using GitHub CLI
+          Write-Host "Pushing changes with GitHub CLI..."
+          gh repo sync RazorEnhanced/razorenhanced.github.io
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Changes pushed successfully!"
+          } else {
+            Write-Host "Error pushing changes with GitHub CLI"
             exit 1
           }
         } else {
