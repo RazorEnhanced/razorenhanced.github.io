@@ -1,10 +1,7 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <item>
-  <version>0.8.2.2</version>
-  <url>
-    https://media.githubusercontent.com/media/RazorEnhanced/razorenhanced.github.io/main/releases/RazorEnhanced-0.8.2.2.zip
-  </url>
-  
+  <version>0.8.2.242</version>
+  <url>https://github.com/RazorEnhanced/razorenhanced.github.io/releases/download/0.8.2.242/RazorEnhanced-0.8.2.242.zip</url>
   <changelog>https://raw.githubusercontent.com/RazorEnhanced/razorenhanced.github.io/main/changelog.html</changelog>
   <mandatory>false</mandatory>
 </item>
