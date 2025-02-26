@@ -52,6 +52,11 @@ jobs:
           Write-Host "Found latest release: $($latestZip.Name) (Size: $($latestZip.Length) bytes)"
           echo "zip_file=$($latestZip.Name)" >> $env:GITHUB_OUTPUT
           
+          # Extract version number from zip filename
+          $versionNumber = $latestZip.Name -replace "RazorEnhanced-", "" -replace "\.zip$", ""
+          echo "version_number=$versionNumber" >> $env:GITHUB_OUTPUT
+          Write-Host "Extracted version: $versionNumber"
+
           # If file is still small, it might be an LFS pointer that wasn't properly downloaded
           if ($latestZip.Length -lt 1000000) {
             Write-Warning "ZIP file is suspiciously small for an application archive. LFS may not have downloaded properly."
@@ -181,6 +186,44 @@ jobs:
         Write-Host ($newContent.Substring(0, [Math]::Min(500, $newContent.Length)))
       shell: pwsh
 
+    # Update RazorEnhancedAutoUpdater.xml with the latest version
+    - name: Update Auto Updater XML
+      run: |
+        $updaterXmlFile = "website_repo/RazorEnhancedAutoUpdater.xml"
+        $versionNumber = "${{ steps.find_zip.outputs.version_number }}"
+        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
+        
+        if (-Not (Test-Path $updaterXmlFile)) {
+          Write-Error "RazorEnhancedAutoUpdater.xml not found!"
+          exit 1
+        }
+
+        # Read the XML file
+        [xml]$xmlContent = Get-Content $updaterXmlFile
+        
+        # Update version
+        $xmlContent.item.version = $versionNumber
+        
+        # Update URL - construct full download URL with the latest zip filename
+        $xmlContent.item.url = "https://github.com/RazorEnhanced/razorenhanced.github.io/releases/download/$versionNumber/$latestZip"
+        
+        # Save the updated XML
+        try {
+          $xmlContent.Save($updaterXmlFile)
+          Write-Host "Successfully updated RazorEnhancedAutoUpdater.xml with version: $versionNumber"
+          Write-Host "Updated download URL: $($xmlContent.item.url)"
+        }
+        catch {
+          Write-Error "Failed to update $updaterXmlFile. Error: $_"
+          exit 1
+        }
+        
+        # Output updated content for verification
+        Write-Host "Updated XML content:"
+        Get-Content $updaterXmlFile
+      shell: pwsh
+
+
     # Commit changes
     - name: Commit
       run: |
@@ -189,6 +232,7 @@ jobs:
         git config user.email "actions@github.com"
         git add doc/
         git add index.htm
+        git add RazorEnhancedAutoUpdater.xml
         git commit -m "GitHub Actions build_docs" || echo "No changes to commit"
       shell: pwsh
 
