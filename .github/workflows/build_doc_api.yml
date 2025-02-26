@@ -12,97 +12,46 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    # Checkout the repository with LFS support enabled
+    # Checkout the repository (without LFS)
     - name: Checkout website repo
       uses: actions/checkout@v3
       with:
         repository: RazorEnhanced/razorenhanced.github.io
         path: website_repo
-        lfs: true  # Enable LFS during checkout to get the actual zip files
     
-    # Debug the working directory and structure
-    - name: Debug directory structure
+    # Get latest version information from local latest.json
+    - name: Get latest version information
+      id: get_version
       run: |
-        Write-Host "Current directory: $pwd"
-        Write-Host "Releases directory contents:"
-        if (Test-Path "website_repo/releases") {
-          Get-ChildItem website_repo/releases
-        } else {
-          Write-Host "Releases directory not found!"
-        }
+        $latestJsonPath = "website_repo/latest.json"
+        $latestJson = Get-Content -Path $latestJsonPath | ConvertFrom-Json
+        $version = $latestJson.version
+        $zipUrl = $latestJson.zipUrl
+        Write-Host "Latest version: $version"
+        Write-Host "ZIP URL: $zipUrl"
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "zip_url=$zipUrl" >> $env:GITHUB_OUTPUT
       shell: pwsh
     
-    # Get the latest zip file directly from the repository
-    - name: Find latest release file
-      id: find_zip
+    # Download the zip file using the URL from latest.json
+    - name: Download release ZIP
       run: |
-        # Check if releases directory exists
-        if (-not (Test-Path "website_repo/releases")) {
-          Write-Error "Releases directory not found!"
-          exit 1
-        }
-        
-        # Get the latest zip file by last modified date
-        $latestZip = Get-ChildItem -Path "website_repo/releases" -Filter "RazorEnhanced-*.zip" | 
-                     Where-Object { $_.Name -ne "RazorEnhanced-latest.zip" } |
-                     Sort-Object -Property LastWriteTime -Descending | 
-                     Select-Object -First 1
-        
-        if ($latestZip) {
-          Write-Host "Found latest release: $($latestZip.Name) (Size: $($latestZip.Length) bytes)"
-          echo "zip_file=$($latestZip.Name)" >> $env:GITHUB_OUTPUT
-          
-          # Extract version number from zip filename
-          $versionNumber = $latestZip.Name -replace "RazorEnhanced-", "" -replace "\.zip$", ""
-          echo "version_number=$versionNumber" >> $env:GITHUB_OUTPUT
-          Write-Host "Extracted version: $versionNumber"
-
-          # If file is still small, it might be an LFS pointer that wasn't properly downloaded
-          if ($latestZip.Length -lt 1000000) {
-            Write-Warning "ZIP file is suspiciously small for an application archive. LFS may not have downloaded properly."
-            echo "use_fallback=true" >> $env:GITHUB_OUTPUT
-          } else {
-            echo "use_fallback=false" >> $env:GITHUB_OUTPUT
-          }
-        } else {
-          Write-Error "No release zip files found in the releases directory"
-          echo "use_fallback=true" >> $env:GITHUB_OUTPUT
-        }
+        $zipUrl = "${{ steps.get_version.outputs.zip_url }}"
+        $outputFile = "RazorEnhanced-${{ steps.get_version.outputs.version }}.zip"
+        Write-Host "Downloading $zipUrl to $outputFile"
+        Invoke-WebRequest -Uri $zipUrl -OutFile $outputFile
       shell: pwsh
-      
-    # Fall back to GitHub Releases API if LFS file download failed
-    - name: Download from GitHub Releases (Fallback)
-      if: steps.find_zip.outputs.use_fallback == 'true'
-      uses: robinraju/release-downloader@v1.6
-      with:
-        repository: "RazorEnhanced/RazorEnhanced"
-        latest: true
-        fileName: "RazorEnhanced-*.zip"
     
-    # Extract from local LFS file if available
-    - name: Extract local ZIP file
-      if: steps.find_zip.outputs.use_fallback != 'true'
+    # Extract the ZIP file
+    - name: Extract ZIP file
       run: |
         # Create extraction directory
         New-Item -ItemType Directory -Path "extracted" -Force
         
-        # Extract the zip
-        $zipPath = "website_repo/releases/${{ steps.find_zip.outputs.zip_file }}"
-        Write-Host "Extracting local ZIP: $zipPath"
-        7z x "$zipPath" -o"./extracted"
-      shell: pwsh
-      
-    # Extract from fallback download if needed
-    - name: Extract downloaded ZIP (Fallback)
-      if: steps.find_zip.outputs.use_fallback == 'true'
-      run: |
-        # Create extraction directory
-        New-Item -ItemType Directory -Path "extracted" -Force
-        
-        # Find the downloaded zip file
-        $downloadedZip = Get-ChildItem -Filter "RazorEnhanced-*.zip" | Select-Object -First 1
-        Write-Host "Extracting downloaded ZIP: $($downloadedZip.Name)"
-        7z x "$($downloadedZip.Name)" -o"./extracted"
+        # Use the downloaded file
+        $outputFile = "RazorEnhanced-${{ steps.get_version.outputs.version }}.zip"
+        Write-Host "Extracting ZIP: $outputFile"
+        7z x $outputFile -o"./extracted"
       shell: pwsh
       
     - name: Display extracted files
@@ -135,95 +84,6 @@ jobs:
         Copy-Item -Path "extracted/doc/*" -Destination "website_repo/doc/" -Recurse -Force -Verbose
       shell: pwsh
 
-    # Update the latest build link in index.htm
-    # This step assumes that the index.htm file is in the root of the website_repo
-    # and that the latest zip file is in the releases directory.
-    # It will replace the old link with the new one.
-    # Update index.htm with the correct download link
-    - name: Update Latest Build Link in index.htm
-      run: |
-        $indexFile = "website_repo/index.htm"
-        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
-        
-        if (-Not (Test-Path $indexFile)) {
-          Write-Error "index.htm not found!"
-          exit 1
-        }
-
-        # Read the file content
-        $content = Get-Content $indexFile -Raw
-        
-        # Make a backup of the original file
-        Copy-Item -Path $indexFile -Destination "$indexFile.bak"
-        
-        # Use a more specific regex to target just the existing filename
-        $pattern = '(https://github\.com/RazorEnhanced/razorenhanced\.github\.io/raw/main/releases/)([^"]+)(" class="btn">)'        
-        $replacement = "`${1}$latestZip`${3}"
-        
-        # Replace the old download link with the new one
-        $updatedContent = $content -replace $pattern, $replacement
-        
-        # Check if the pattern was found and replacement was made
-        if ($updatedContent -eq $content) {
-          Write-Warning "No matches found for replacement pattern. The file remains unchanged."
-        }
-        
-        try {
-          # Write the updated content back to the file
-          Set-Content -Path $indexFile -Value $updatedContent -ErrorAction Stop
-          Write-Host "Successfully updated latest build link in index.htm to use file: $latestZip"
-        }
-        catch {
-          Write-Error "Failed to write to $indexFile. Error: $_"
-          # Restore from backup
-          Copy-Item -Path "$indexFile.bak" -Destination $indexFile
-          exit 1
-        }
-        
-        # Add verbose output to help debug
-        Write-Host "File content after update (first 500 chars):"
-        $newContent = Get-Content $indexFile -Raw
-        Write-Host ($newContent.Substring(0, [Math]::Min(500, $newContent.Length)))
-      shell: pwsh
-
-    # Update RazorEnhancedAutoUpdater.xml with the latest version
-    - name: Update Auto Updater XML
-      run: |
-        $updaterXmlFile = "website_repo/RazorEnhancedAutoUpdater.xml"
-        $versionNumber = "${{ steps.find_zip.outputs.version_number }}"
-        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
-        
-        if (-Not (Test-Path $updaterXmlFile)) {
-          Write-Error "RazorEnhancedAutoUpdater.xml not found!"
-          exit 1
-        }
-
-        # Read the XML file
-        [xml]$xmlContent = Get-Content $updaterXmlFile
-        
-        # Update version
-        $xmlContent.item.version = $versionNumber
-        
-        # Update URL - construct full download URL with the latest zip filename
-        $xmlContent.item.url = "https://github.com/RazorEnhanced/razorenhanced.github.io/raw/main/releases/$latestZip"
-        
-        # Save the updated XML
-        try {
-          $xmlContent.Save($updaterXmlFile)
-          Write-Host "Successfully updated RazorEnhancedAutoUpdater.xml with version: $versionNumber"
-          Write-Host "Updated download URL: $($xmlContent.item.url)"
-        }
-        catch {
-          Write-Error "Failed to update $updaterXmlFile. Error: $_"
-          exit 1
-        }
-        
-        # Output updated content for verification
-        Write-Host "Updated XML content:"
-        Get-Content $updaterXmlFile
-      shell: pwsh
-
-
     # Commit changes
     - name: Commit
       run: |
@@ -231,8 +91,6 @@ jobs:
         git config user.name "GitHub Actions Bot"
         git config user.email "actions@github.com"
         git add doc/
-        git add index.htm
-        git add RazorEnhancedAutoUpdater.xml
         git commit -m "GitHub Actions build_docs" || echo "No changes to commit"
       shell: pwsh
 
