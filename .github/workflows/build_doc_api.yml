@@ -188,6 +188,7 @@ jobs:
         git config user.name "GitHub Actions Bot"
         git config user.email "actions@github.com"
         git add doc/
+        git add index.htm
         git commit -m "GitHub Actions build_docs" || echo "No changes to commit"
       shell: pwsh
 
