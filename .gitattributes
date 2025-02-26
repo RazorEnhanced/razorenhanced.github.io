@@ -1,2 +1,0 @@
-releases/RazorEnhanced-0.8.2.242.zip filter=lfs diff=lfs merge=lfs -text
-releases/*.zip filter=lfs diff=lfs merge=lfs -text
