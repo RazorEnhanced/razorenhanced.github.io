@@ -162,16 +162,27 @@ jobs:
     - name: Update Latest Build Link in index.htm
       run: |
         $indexFile = "website_repo/index.htm"
-        $downloadUrl = "${{ steps.get_release_url.outputs.download_url }}"
+        $latestZip = "${{ steps.find_zip.outputs.zip_file }}"
+        
         if (-Not (Test-Path $indexFile)) {
           Write-Error "index.htm not found!"
           exit 1
         }
 
-        # Replace the old download link with the new one
-        (Get-Content $indexFile) -replace 'https:\/\/github\.com\/RazorEnhanced\/razorenhanced\.github\.io\/releases\/download\/[\d.]+\/RazorEnhanced-[\d.]+\.zip', $downloadUrl | Set-Content $indexFile
+        # Read the file content
+        $content = Get-Content $indexFile -Raw
         
-        Write-Host "Updated Latest Build link in index.htm to: $downloadUrl"
+        # Use a more specific regex to target just the XXXX placeholder or the existing filename
+        $pattern = '(https://media\.githubusercontent\.com/media/RazorEnhanced/razorenhanced\.github\.io/main/releases/)([^"]+)(" class="btn">)'
+        $replacement = "`${1}$latestZip`${3}"
+        
+        # Replace the old download link with the new one
+        $updatedContent = $content -replace $pattern, $replacement
+        
+        # Write the updated content back to the file
+        Set-Content -Path $indexFile -Value $updatedContent
+        
+        Write-Host "Updated Latest Build link in index.htm to use file: $latestZip"
       shell: pwsh
 
     # Commit changes
