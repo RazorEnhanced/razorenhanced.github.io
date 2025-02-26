@@ -134,6 +134,7 @@ jobs:
     # This step assumes that the index.htm file is in the root of the website_repo
     # and that the latest zip file is in the releases directory.
     # It will replace the old link with the new one.
+    # Update index.htm with the correct download link
     - name: Update Latest Build Link in index.htm
       run: |
         $indexFile = "website_repo/index.htm"
@@ -147,17 +148,37 @@ jobs:
         # Read the file content
         $content = Get-Content $indexFile -Raw
         
-        # Use a more specific regex to target just the XXXX placeholder or the existing filename
+        # Make a backup of the original file
+        Copy-Item -Path $indexFile -Destination "$indexFile.bak"
+        
+        # Use a more specific regex to target just the existing filename
         $pattern = '(https://media\.githubusercontent\.com/media/RazorEnhanced/razorenhanced\.github\.io/main/releases/)([^"]+)(" class="btn">)'
         $replacement = "`${1}$latestZip`${3}"
         
         # Replace the old download link with the new one
         $updatedContent = $content -replace $pattern, $replacement
         
-        # Write the updated content back to the file
-        Set-Content -Path $indexFile -Value $updatedContent
+        # Check if the pattern was found and replacement was made
+        if ($updatedContent -eq $content) {
+          Write-Warning "No matches found for replacement pattern. The file remains unchanged."
+        }
         
-        Write-Host "Updated Latest Build link in index.htm to use file: $latestZip"
+        try {
+          # Write the updated content back to the file
+          Set-Content -Path $indexFile -Value $updatedContent -ErrorAction Stop
+          Write-Host "Successfully updated latest build link in index.htm to use file: $latestZip"
+        }
+        catch {
+          Write-Error "Failed to write to $indexFile. Error: $_"
+          # Restore from backup
+          Copy-Item -Path "$indexFile.bak" -Destination $indexFile
+          exit 1
+        }
+        
+        # Add verbose output to help debug
+        Write-Host "File content after update (first 500 chars):"
+        $newContent = Get-Content $indexFile -Raw
+        Write-Host ($newContent.Substring(0, [Math]::Min(500, $newContent.Length)))
       shell: pwsh
 
     # Commit changes
