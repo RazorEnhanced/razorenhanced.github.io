@@ -205,7 +205,7 @@ jobs:
         $xmlContent.item.version = $versionNumber
         
         # Update URL - construct full download URL with the latest zip filename
-        $xmlContent.item.url = "https://github.com/RazorEnhanced/razorenhanced.github.io/releases/download/$versionNumber/$latestZip"
+        $xmlContent.item.url = "https://media.githubusercontent.com/media/RazorEnhanced/razorenhanced.github.io/main/releases/$latestZip"
         
         # Save the updated XML
         try {
