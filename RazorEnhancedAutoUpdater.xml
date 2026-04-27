@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <item>
-  <version>1.0.0.6</version>
-  <url>https://github.com/RazorEnhanced/RazorEnhanced/releases/download/v1.0.0.6/RazorEnhanced-1.0.0.6.zip</url>
+  <version>1.0.0.7</version>
+  <url>https://github.com/RazorEnhanced/RazorEnhanced/releases/download/v1.0.0.7/RazorEnhanced-1.0.0.7.zip</url>
   <changelog>https://raw.githubusercontent.com/RazorEnhanced/razorenhanced.github.io/main/changelog.html</changelog>
   <mandatory>false</mandatory>
 </item>
